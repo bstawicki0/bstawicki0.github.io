@@ -144,7 +144,7 @@ app.post('/api/cart/:username', async (req, res) => {
     }
 });
 
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, async () => {
     console.log(`Server is running on http://localhost:${PORT}`);
     await initDB();
