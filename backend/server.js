@@ -1,43 +1,39 @@
 const express = require('express');
 const mysql = require('mysql2/promise');
 const cors = require('cors');
-const path = require('path');
 const bcrypt = require('bcryptjs');
 
 const app = express();
+
 app.use(cors());
 app.use(express.json());
 
-// Serve static files from the root directory
-app.use(express.static(path.join(__dirname, '..')));
+// ======================
+// ENV CONFIG (RENDER)
+// ======================
+const PORT = process.env.PORT || 3000;
 
-// MySQL connection configuration
 const dbConfig = {
-    host: 'localhost',
-    user: 'root',
-    password: 'x', // Domyślne w XAMPP to puste pole
-    database: 'fuel_labs',
-    port: 3306
+    host: process.env.DB_HOST,
+    user: process.env.DB_USER,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    port: process.env.DB_PORT || 3306,
+    waitForConnections: true,
+    connectionLimit: 10,
 };
 
-// Initialize Database connection pool
+// ======================
+// DB POOL
+// ======================
 let pool;
 
 async function initDB() {
     try {
-        // First connect without database to create it if it doesn't exist
-        const connection = await mysql.createConnection({
-            host: dbConfig.host,
-            user: dbConfig.user,
-            password: dbConfig.password,
-            port: dbConfig.port
-        });
+        pool = mysql.createPool(dbConfig);
 
-        await connection.query('CREATE DATABASE IF NOT EXISTS fuel_labs');
-        await connection.query('USE fuel_labs');
-
-        // Create Users table
-        await connection.query(`
+        // Create tables (bez CREATE DATABASE — robi się w hostingu)
+        await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 username VARCHAR(50) UNIQUE NOT NULL,
@@ -46,8 +42,7 @@ async function initDB() {
             )
         `);
 
-        // Create Cart Items table
-        await connection.query(`
+        await pool.query(`
             CREATE TABLE IF NOT EXISTS cart_items (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 username VARCHAR(50) NOT NULL,
@@ -57,95 +52,122 @@ async function initDB() {
             )
         `);
 
-        console.log('Database and tables initialized successfully!');
-
-        // Create connection pool
-        pool = mysql.createPool(dbConfig);
-    } catch (error) {
-        console.error('Error initializing database! Please check XAMPP and your credentials.', error);
+        console.log('Database connected & tables ready');
+    } catch (err) {
+        console.error('DB ERROR:', err);
         process.exit(1);
     }
 }
 
-// Routes
+// ======================
+// ROUTES
+// ======================
 
-// Register new user
+// REGISTER
 app.post('/api/register', async (req, res) => {
     try {
         const { username, password } = req.body;
-        if (!username || !password) return res.status(400).json({ error: 'Missing fields' });
 
-        const [existingUser] = await pool.query('SELECT * FROM users WHERE username = ?', [username]);
-        if (existingUser.length > 0) return res.status(400).json({ error: 'Username already exists' });
+        if (!username || !password)
+            return res.status(400).json({ error: 'Missing fields' });
 
-        const salt = await bcrypt.genSalt(10);
-        const hashedPassword = await bcrypt.hash(password, salt);
+        const [existing] = await pool.query(
+            'SELECT * FROM users WHERE username = ?',
+            [username]
+        );
 
-        await pool.query('INSERT INTO users (username, password) VALUES (?, ?)', [username, hashedPassword]);
-        res.json({ message: 'User registered successfully' });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Internal server error' });
+        if (existing.length > 0)
+            return res.status(400).json({ error: 'Username exists' });
+
+        const hashed = await bcrypt.hash(password, 10);
+
+        await pool.query(
+            'INSERT INTO users (username, password) VALUES (?, ?)',
+            [username, hashed]
+        );
+
+        res.json({ message: 'User created' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Server error' });
     }
 });
 
-// Login
+// LOGIN
 app.post('/api/login', async (req, res) => {
     try {
         const { username, password } = req.body;
-        const [users] = await pool.query('SELECT * FROM users WHERE username = ?', [username]);
 
-        if (users.length === 0) return res.status(400).json({ error: 'Invalid username or password' });
+        const [users] = await pool.query(
+            'SELECT * FROM users WHERE username = ?',
+            [username]
+        );
 
-        const validPassword = await bcrypt.compare(password, users[0].password);
-        if (!validPassword) return res.status(400).json({ error: 'Invalid username or password' });
+        if (users.length === 0)
+            return res.status(400).json({ error: 'Invalid credentials' });
 
-        res.json({ message: 'Login successful', username });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Internal server error' });
+        const user = users[0];
+
+        const match = await bcrypt.compare(password, user.password);
+
+        if (!match)
+            return res.status(400).json({ error: 'Invalid credentials' });
+
+        res.json({ message: 'Login success', username });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Server error' });
     }
 });
 
-// Get user cart
+// GET CART
 app.get('/api/cart/:username', async (req, res) => {
     try {
         const { username } = req.params;
-        const [items] = await pool.query('SELECT product_id FROM cart_items WHERE username = ?', [username]);
 
-        // We just return array of product IDs that are in the cart
-        const productIds = items.map(item => item.product_id);
-        res.json(productIds);
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Internal server error' });
+        const [items] = await pool.query(
+            'SELECT product_id FROM cart_items WHERE username = ?',
+            [username]
+        );
+
+        res.json(items.map(i => i.product_id));
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Server error' });
     }
 });
 
-// Save user cart (Replace entirely)
+// SAVE CART
 app.post('/api/cart/:username', async (req, res) => {
     try {
         const { username } = req.params;
-        const { productIds } = req.body; // Array of product IDs
+        const { productIds } = req.body;
 
-        // Clear existing cart
-        await pool.query('DELETE FROM cart_items WHERE username = ?', [username]);
+        await pool.query(
+            'DELETE FROM cart_items WHERE username = ?',
+            [username]
+        );
 
-        // Insert new items
-        if (productIds && productIds.length > 0) {
+        if (productIds?.length) {
             const values = productIds.map(id => [username, id]);
-            await pool.query('INSERT INTO cart_items (username, product_id) VALUES ?', [values]);
+
+            await pool.query(
+                'INSERT INTO cart_items (username, product_id) VALUES ?',
+                [values]
+            );
         }
 
-        res.json({ message: 'Cart saved successfully' });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: 'Internal server error' });
+        res.json({ message: 'Cart saved' });
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ error: 'Server error' });
     }
 });
 
-const PORT = process.env.PORT || 3000;
+// ======================
+// START SERVER
+// ======================
 app.listen(PORT, async () => {
-    console.log(`Server is running on port ${PORT}`);    
+    console.log(`Server running on port ${PORT}`);
     await initDB();
 });
