@@ -173,37 +173,19 @@ function updateUserDisplay() {
     }
 }
 
+// Render Products
 function renderProducts() {
     if (!productGrid) return;
-
     productGrid.innerHTML = products.map(product => `
-    
-        <div class="product-card"
-             onclick="openProduct(${product.id})"
-             style="cursor:pointer;">
-
-            <img src="img/${product.image}"
-                 alt="${product.name}"
-                 class="product-img">
-
+        <div class="product-card" onclick="window.location.href='product.html?id=${product.id}'" style="cursor: pointer;">
+            <img src="img/${product.image}" alt="${product.name}" class="product-img">
             <h3 class="product-title">${product.name}</h3>
-
-            <div class="product-price">
-                $${product.price.toFixed(2)}
-            </div>
-
-            <button class="add-to-cart"
-                    onclick="event.stopPropagation(); addToCart(${product.id})">
-                Add to Cart
-            </button>
-
+            <div class="product-price">$${product.price.toFixed(2)}</div>
+            <button class="add-to-cart" onclick="event.stopPropagation(); addToCart(${product.id})">Add to Cart</button>
         </div>
-
     `).join('');
 }
-function openProduct(id) {
-    window.location.href = `item.html?id=${id}`;
-}
+
 // Add to Cart
 function addToCart(productId) {
     const product = products.find(p => p.id === productId);
@@ -279,13 +261,50 @@ function toggleCart() {
     if (cartOverlay) cartOverlay.classList.toggle('active');
 }
 
+// Render Single Product Details
+function renderProductDetails() {
+    const productDetailsContainer = document.getElementById('product-details');
+    if (!productDetailsContainer) return;
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const productId = parseInt(urlParams.get('id'));
+    const product = products.find(p => p.id === productId);
+
+    if (!product) {
+        productDetailsContainer.innerHTML = '<p style="text-align: center; color: var(--text-secondary); margin-top: 2rem;">Product not found.</p>';
+        return;
+    }
+
+    productDetailsContainer.innerHTML = `
+        <div class="product-viewer" style="display: flex; flex-wrap: wrap; gap: 3rem; align-items: center; justify-content: center; margin-top: 2rem;">
+            <div class="product-viewer-img" style="flex: 1; min-width: 300px; max-width: 500px; background: var(--bg-card); padding: 2rem; border-radius: 15px; text-align: center;">
+                <img src="img/${product.image}" alt="${product.name}" style="width: 100%; max-width: 400px; height: auto; object-fit: contain;">
+            </div>
+            <div class="product-viewer-info" style="flex: 1; min-width: 300px; display: flex; flex-direction: column; gap: 1rem;">
+                <h1 style="font-size: 2.5rem; margin-bottom: 0;">${product.name}</h1>
+                <div style="font-size: 1.5rem; color: var(--accent-primary); font-weight: 600;">$${product.price.toFixed(2)}</div>
+                <p style="color: var(--text-secondary); line-height: 1.6;">Premium quality supplement designed to help you reach your goals. Add this to your stack for maximum performance and recovery.</p>
+                <button class="add-to-cart" onclick="addToCart(${product.id})" style="padding: 1rem; font-size: 1.1rem; max-width: 250px; margin-top: 1rem; width: 100%;">Add to Cart</button>
+            </div>
+        </div>
+    `;
+}
+
 // Event Listeners
 if (cartBtn) cartBtn.addEventListener('click', toggleCart);
 if (closeCartBtn) closeCartBtn.addEventListener('click', toggleCart);
 if (cartOverlay) cartOverlay.addEventListener('click', toggleCart);
 if (loginBtn) loginBtn.addEventListener('click', toggleAuthModal);
 
+// Force reload on back navigation (bfcache)
+window.addEventListener('pageshow', function (event) {
+    if (event.persisted) {
+        window.location.reload();
+    }
+});
+
 // Initialize
 updateUserDisplay();
 renderProducts();
+renderProductDetails();
 updateCart();
