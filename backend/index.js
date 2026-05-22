@@ -1,12 +1,15 @@
 const express = require('express');
 const mysql = require('mysql2/promise');
 const cors = require('cors');
+const path = require('path');
 const bcrypt = require('bcryptjs');
 
 const app = express();
-
 app.use(cors());
 app.use(express.json());
+
+// Serve static files from the root directory
+app.use(express.static(path.join(__dirname, '..')));
 
 // ======================
 // ENV CONFIG (RENDER)
@@ -30,10 +33,19 @@ let pool;
 
 async function initDB() {
     try {
-        pool = mysql.createPool(dbConfig);
+        // First connect without database to create it if it doesn't exist
+        const connection = await mysql.createConnection({
+            host: dbConfig.host,
+            user: dbConfig.user,
+            password: dbConfig.password,
+            port: dbConfig.port
+        });
 
-        // Create tables (bez CREATE DATABASE — robi się w hostingu)
-        await pool.query(`
+        await connection.query('CREATE DATABASE IF NOT EXISTS fuel_labs');
+        await connection.query('USE fuel_labs');
+
+        // Create Users table
+        await connection.query(`
             CREATE TABLE IF NOT EXISTS users (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 username VARCHAR(50) UNIQUE NOT NULL,
@@ -42,7 +54,8 @@ async function initDB() {
             )
         `);
 
-        await pool.query(`
+        // Create Cart Items table
+        await connection.query(`
             CREATE TABLE IF NOT EXISTS cart_items (
                 id INT AUTO_INCREMENT PRIMARY KEY,
                 username VARCHAR(50) NOT NULL,
@@ -52,44 +65,35 @@ async function initDB() {
             )
         `);
 
-        console.log('Database connected & tables ready');
-    } catch (err) {
-        console.error('DB ERROR:', err);
+        console.log('Database and tables initialized successfully!');
+
+        // Create connection pool
+        pool = mysql.createPool(dbConfig);
+    } catch (error) {
+        console.error('Error initializing database! Please check XAMPP and your credentials.', error);
         process.exit(1);
     }
 }
 
-// ======================
-// ROUTES
-// ======================
+// Routes
 
-// REGISTER
+// Register new user
 app.post('/api/register', async (req, res) => {
     try {
         const { username, password } = req.body;
+        if (!username || !password) return res.status(400).json({ error: 'Missing fields' });
 
-        if (!username || !password)
-            return res.status(400).json({ error: 'Missing fields' });
+        const [existingUser] = await pool.query('SELECT * FROM users WHERE username = ?', [username]);
+        if (existingUser.length > 0) return res.status(400).json({ error: 'Username already exists' });
 
-        const [existing] = await pool.query(
-            'SELECT * FROM users WHERE username = ?',
-            [username]
-        );
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
 
-        if (existing.length > 0)
-            return res.status(400).json({ error: 'Username exists' });
-
-        const hashed = await bcrypt.hash(password, 10);
-
-        await pool.query(
-            'INSERT INTO users (username, password) VALUES (?, ?)',
-            [username, hashed]
-        );
-
-        res.json({ message: 'User created' });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Server error' });
+        await pool.query('INSERT INTO users (username, password) VALUES (?, ?)', [username, hashedPassword]);
+        res.json({ message: 'User registered successfully' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
