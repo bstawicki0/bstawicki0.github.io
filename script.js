@@ -173,19 +173,37 @@ function updateUserDisplay() {
     }
 }
 
-// Render Products
 function renderProducts() {
     if (!productGrid) return;
+
     productGrid.innerHTML = products.map(product => `
-        <div class="product-card">
-            <img src="img/${product.image}" alt="${product.name}" class="product-img">
+    
+        <div class="product-card"
+             onclick="openProduct(${product.id})"
+             style="cursor:pointer;">
+
+            <img src="img/${product.image}"
+                 alt="${product.name}"
+                 class="product-img">
+
             <h3 class="product-title">${product.name}</h3>
-            <div class="product-price">$${product.price.toFixed(2)}</div>
-            <button class="add-to-cart" onclick="addToCart(${product.id})">Add to Cart</button>
+
+            <div class="product-price">
+                $${product.price.toFixed(2)}
+            </div>
+
+            <button class="add-to-cart"
+                    onclick="event.stopPropagation(); addToCart(${product.id})">
+                Add to Cart
+            </button>
+
         </div>
+
     `).join('');
 }
-
+function openProduct(id) {
+    window.location.href = `item.html?id=${id}`;
+}
 // Add to Cart
 function addToCart(productId) {
     const product = products.find(p => p.id === productId);
