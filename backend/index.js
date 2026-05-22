@@ -93,81 +93,63 @@ app.post('/api/register', async (req, res) => {
     }
 });
 
-// LOGIN
+// Login
 app.post('/api/login', async (req, res) => {
     try {
         const { username, password } = req.body;
+        const [users] = await pool.query('SELECT * FROM users WHERE username = ?', [username]);
 
-        const [users] = await pool.query(
-            'SELECT * FROM users WHERE username = ?',
-            [username]
-        );
+        if (users.length === 0) return res.status(400).json({ error: 'Invalid username or password' });
 
-        if (users.length === 0)
-            return res.status(400).json({ error: 'Invalid credentials' });
+        const validPassword = await bcrypt.compare(password, users[0].password);
+        if (!validPassword) return res.status(400).json({ error: 'Invalid username or password' });
 
-        const user = users[0];
-
-        const match = await bcrypt.compare(password, user.password);
-
-        if (!match)
-            return res.status(400).json({ error: 'Invalid credentials' });
-
-        res.json({ message: 'Login success', username });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Server error' });
+        res.json({ message: 'Login successful', username });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
-// GET CART
+// Get user cart
 app.get('/api/cart/:username', async (req, res) => {
     try {
         const { username } = req.params;
+        const [items] = await pool.query('SELECT product_id FROM cart_items WHERE username = ?', [username]);
 
-        const [items] = await pool.query(
-            'SELECT product_id FROM cart_items WHERE username = ?',
-            [username]
-        );
-
-        res.json(items.map(i => i.product_id));
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Server error' });
+        // We just return array of product IDs that are in the cart
+        const productIds = items.map(item => item.product_id);
+        res.json(productIds);
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
-// SAVE CART
+// Save user cart (Replace entirely)
 app.post('/api/cart/:username', async (req, res) => {
     try {
         const { username } = req.params;
-        const { productIds } = req.body;
+        const { productIds } = req.body; // Array of product IDs
 
-        await pool.query(
-            'DELETE FROM cart_items WHERE username = ?',
-            [username]
-        );
+        // Clear existing cart
+        await pool.query('DELETE FROM cart_items WHERE username = ?', [username]);
 
-        if (productIds?.length) {
+        // Insert new items
+        if (productIds && productIds.length > 0) {
             const values = productIds.map(id => [username, id]);
-
-            await pool.query(
-                'INSERT INTO cart_items (username, product_id) VALUES ?',
-                [values]
-            );
+            await pool.query('INSERT INTO cart_items (username, product_id) VALUES ?', [values]);
         }
 
-        res.json({ message: 'Cart saved' });
-    } catch (err) {
-        console.error(err);
-        res.status(500).json({ error: 'Server error' });
+        res.json({ message: 'Cart saved successfully' });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ error: 'Internal server error' });
     }
 });
 
-// ======================
-// START SERVER
-// ======================
+const PORT = 3000;
 app.listen(PORT, async () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(`Server is running on http://localhost:${PORT}`);
     await initDB();
 });
