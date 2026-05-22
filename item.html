@@ -1,0 +1,79 @@
+<!-- item.html -->
+<!DOCTYPE html>
+<html lang="pl">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Fuel Labs | Product Viewer</title>
+
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&display=swap"
+        rel="stylesheet" />
+    <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+
+    <!-- NAVBAR -->
+    <nav class="navbar">
+        <div class="logo">FUEL <span>LABS</span></div>
+
+        <div class="nav-links">
+            <a href="index.html">Home</a>
+            <a href="shop.html">Shop</a>
+            <a href="index.html#about">About</a>
+        </div>
+
+        <div class="cart-icon">
+            Cart <span id="cart-count">0</span>
+        </div>
+    </nav>
+
+    <!-- PRODUCT VIEW -->
+    <section class="product-view-section">
+        <div class="product-view-container">
+
+            <!-- LEFT -->
+            <div class="product-view-image">
+                <img id="product-image" src="" alt="">
+            </div>
+
+            <!-- RIGHT -->
+            <div class="product-view-info">
+
+                <span class="product-category">PREMIUM SUPPLEMENT</span>
+
+                <h1 id="product-name">Loading...</h1>
+
+                <div class="viewer-price" id="product-price">$0.00</div>
+
+                <p class="product-description" id="product-description">
+                    Loading product description...
+                </p>
+
+                <div class="ingredients-box">
+                    <h3>Ingredients</h3>
+
+                    <ul id="ingredients-list">
+                    </ul>
+                </div>
+
+                <div class="nutrition-box">
+                    <h3>Benefits</h3>
+
+                    <div id="benefits-list"></div>
+                </div>
+
+                <button class="buy-btn" id="add-to-cart-btn">
+                    Add To Cart
+                </button>
+
+            </div>
+
+        </div>
+    </section>
+
+    <script src="item.js"></script>
+</body>
+
+</html>
