@@ -161,16 +161,21 @@ function logoutUser() {
 }
 
 function updateUserDisplay() {
+    const ordersNavLink = document.getElementById('orders-nav-link');
     if (currentUser) {
         if (loginBtn) loginBtn.style.display = 'none';
         if (userDisplay) {
             userDisplay.style.display = 'block';
             userDisplay.innerHTML = `${currentUser} <span style="font-size: 0.8rem; margin-left: 0.5rem; cursor: pointer; color: var(--text-secondary);" onclick="logoutUser()">[Logout]</span>`;
         }
+        if (ordersNavLink) ordersNavLink.style.display = 'inline-block';
     } else {
         if (loginBtn) loginBtn.style.display = 'block';
         if (userDisplay) userDisplay.style.display = 'none';
+        if (ordersNavLink) ordersNavLink.style.display = 'none';
     }
+    // Render order history if on orders page
+    renderOrdersHistory();
 }
 
 // Render Products
@@ -302,6 +307,215 @@ window.addEventListener('pageshow', function (event) {
         window.location.reload();
     }
 });
+
+// Checkout Modals Elements
+const checkoutModal = document.getElementById('checkout-modal');
+const successModal = document.getElementById('success-modal');
+const checkoutSummaryItems = document.getElementById('checkout-summary-items');
+const checkoutTotalPrice = document.getElementById('checkout-total-price');
+
+function toggleCheckoutModal() {
+    if (checkoutModal) {
+        checkoutModal.classList.toggle('active');
+    }
+}
+
+function handleCheckout() {
+    if (!currentUser) {
+        // Close cart sidebar
+        toggleCart();
+        // Open auth modal
+        toggleAuthModal();
+        // Set error message
+        if (authError) {
+            authError.innerText = 'Please login to checkout.';
+            authError.style.display = 'block';
+        }
+        return;
+    }
+    
+    if (cart.length === 0) {
+        alert('Your cart is empty.');
+        return;
+    }
+    
+    // Fill checkout summary
+    if (checkoutSummaryItems) {
+        checkoutSummaryItems.innerHTML = cart.map(item => `
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; font-size: 0.95rem;">
+                <span style="color: var(--text-primary); text-overflow: ellipsis; overflow: hidden; white-space: nowrap; max-width: 250px;">${item.name}</span>
+                <span style="color: var(--accent-primary); font-weight: 600;">$${item.price.toFixed(2)}</span>
+            </div>
+        `).join('');
+    }
+    
+    const total = cart.reduce((sum, item) => sum + item.price, 0);
+    if (checkoutTotalPrice) {
+        checkoutTotalPrice.innerText = `$${total.toFixed(2)}`;
+    }
+    
+    // Close cart sidebar and open checkout modal
+    toggleCart();
+    toggleCheckoutModal();
+}
+
+async function submitOrder() {
+    const fullName = document.getElementById('checkout-fullname').value.trim();
+    const address = document.getElementById('checkout-address').value.trim();
+    const zipCode = document.getElementById('checkout-zip').value.trim();
+    const city = document.getElementById('checkout-city').value.trim();
+    const paymentMethod = document.querySelector('input[name="payment-method"]:checked').value;
+    const total = cart.reduce((sum, item) => sum + item.price, 0);
+
+    // Group items to count quantities
+    const groupedItems = {};
+    cart.forEach(item => {
+        if (!groupedItems[item.id]) {
+            groupedItems[item.id] = { productId: item.id, price: item.price, quantity: 0 };
+        }
+        groupedItems[item.id].quantity += 1;
+    });
+    
+    const items = Object.values(groupedItems);
+
+    try {
+        const response = await fetch(`${API_URL}/orders`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                username: currentUser,
+                totalPrice: total,
+                fullName,
+                address,
+                city,
+                zipCode,
+                paymentMethod,
+                items
+            })
+        });
+
+        if (response.ok) {
+            // Order created successfully!
+            // Clear local cart
+            cart = [];
+            localStorage.setItem(getLocalCartKey(), JSON.stringify(cart));
+            updateCart();
+            
+            // Clear form
+            const form = document.getElementById('checkout-form');
+            if (form) form.reset();
+            
+            // Toggle checkout modal off and success modal on
+            toggleCheckoutModal();
+            if (successModal) successModal.classList.add('active');
+        } else {
+            const data = await response.json();
+            alert(data.error || 'Failed to place order.');
+        }
+    } catch (error) {
+        console.error('Error submitting order:', error);
+        alert('Server error. Is the backend running?');
+    }
+}
+
+function goToOrders() {
+    if (successModal) successModal.classList.remove('active');
+    window.location.href = 'orders.html';
+}
+
+// Render Orders History
+async function renderOrdersHistory() {
+    const container = document.getElementById('orders-main-content');
+    if (!container) return;
+
+    if (!currentUser) {
+        container.innerHTML = `
+            <div style="text-align: center; padding: 4rem 2rem; background: var(--bg-card); border: 1px solid var(--glass-border); border-radius: 15px; max-width: 500px; margin: 0 auto; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+                <h3 style="margin-bottom: 1rem; font-size: 1.5rem; color: var(--accent-primary);">Login Required</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 2rem; line-height: 1.6;">You need to be logged in to view your order history.</p>
+                <button class="auth-btn" style="max-width: 200px; margin: 0 auto;" onclick="toggleAuthModal()">Login / Register</button>
+            </div>
+        `;
+        return;
+    }
+
+    try {
+        const response = await fetch(`${API_URL}/orders/${currentUser}`);
+        if (!response.ok) {
+            throw new Error('Failed to fetch orders');
+        }
+        
+        const orders = await response.json();
+        
+        if (orders.length === 0) {
+            container.innerHTML = `
+                <div style="text-align: center; padding: 4rem 2rem; background: var(--bg-card); border: 1px solid var(--glass-border); border-radius: 15px; max-width: 500px; margin: 0 auto; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+                    <div style="font-size: 3rem; margin-bottom: 1rem;">📦</div>
+                    <h3 style="margin-bottom: 1rem; font-size: 1.5rem; color: var(--accent-primary);">No Orders Yet</h3>
+                    <p style="color: var(--text-secondary); margin-bottom: 2rem; line-height: 1.6;">You haven't placed any orders yet. Visit our shop to get started!</p>
+                    <button class="auth-btn" style="max-width: 200px; margin: 0 auto;" onclick="window.location.href='shop.html'">Go to Shop</button>
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = `
+            <div class="orders-list">
+                ${orders.map(order => {
+                    const dateFormatted = new Date(order.createdAt).toLocaleString();
+                    const statusClass = order.status.toLowerCase() === 'pending' ? 'pending' : (order.status.toLowerCase() === 'completed' ? 'completed' : 'shipped');
+                    const displayStatus = order.status === 'Pending' ? 'In progress' : order.status;
+
+                    return `
+                        <div class="order-card">
+                            <div class="order-card-header">
+                                <div>
+                                    <div class="order-id">ORDER #ORD-${order.id}</div>
+                                    <div class="order-date">${dateFormatted}</div>
+                                </div>
+                                <span class="status-badge ${statusClass}">${displayStatus}</span>
+                            </div>
+                            <div class="order-body">
+                                <div class="order-items-list">
+                                    ${order.items.map(item => {
+                                        const product = products.find(p => p.id === item.productId) || { name: 'Unknown Product', image: 'protein.png' };
+                                        return `
+                                            <div class="order-item-row">
+                                                <img src="img/${product.image}" alt="${product.name}">
+                                                <div class="order-item-details">
+                                                    <div class="order-item-name">${product.name}</div>
+                                                    <div class="order-item-meta">Qty: ${item.quantity} | Price: $${Number(item.price).toFixed(2)}</div>
+                                                </div>
+                                                <div style="font-weight: 600; color: var(--text-primary);">$${(Number(item.price) * item.quantity).toFixed(2)}</div>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                                <div class="order-details-pane">
+                                    <h4>Delivery & Payment</h4>
+                                    <p><strong>Name:</strong> ${order.fullName}</p>
+                                    <p><strong>Address:</strong> ${order.address}, ${order.zipCode} ${order.city}</p>
+                                    <p><strong>Payment:</strong> ${order.paymentMethod}</p>
+                                    <div class="order-total-row">
+                                        <span>Total Paid:</span>
+                                        <span style="color: var(--accent-primary); font-weight: 800;">$${Number(order.totalPrice).toFixed(2)}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+        `;
+    } catch (error) {
+        console.error('Error loading orders:', error);
+        container.innerHTML = `
+            <div style="text-align: center; padding: 3rem 0; color: #ff3366;">
+                <p>Failed to load orders. Please try again later.</p>
+            </div>
+        `;
+    }
+}
 
 // Initialize
 updateUserDisplay();
