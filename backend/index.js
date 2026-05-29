@@ -14,7 +14,7 @@ app.use(express.static(path.join(__dirname, '..')));
 // ======================
 // ENV CONFIG (RENDER)
 // ======================
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3306;
 
 const dbConfig = {
     host: process.env.DB_HOST,
