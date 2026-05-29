@@ -65,6 +65,35 @@ async function initDB() {
             )
         `);
 
+        // Create Orders table
+        await connection.query(`
+            CREATE TABLE IF NOT EXISTS orders (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                username VARCHAR(50) NOT NULL,
+                total_price DECIMAL(10, 2) NOT NULL,
+                full_name VARCHAR(100) NOT NULL,
+                address VARCHAR(255) NOT NULL,
+                city VARCHAR(100) NOT NULL,
+                zip_code VARCHAR(20) NOT NULL,
+                payment_method VARCHAR(50) NOT NULL,
+                status VARCHAR(50) DEFAULT 'Pending',
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (username) REFERENCES users(username) ON DELETE CASCADE
+            )
+        `);
+
+        // Create Order Items table
+        await connection.query(`
+            CREATE TABLE IF NOT EXISTS order_items (
+                id INT AUTO_INCREMENT PRIMARY KEY,
+                order_id INT NOT NULL,
+                product_id INT NOT NULL,
+                quantity INT DEFAULT 1,
+                price DECIMAL(10, 2) NOT NULL,
+                FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
+            )
+        `);
+
         console.log('Database and tables initialized successfully!');
 
         // Create connection pool
@@ -148,6 +177,109 @@ app.post('/api/cart/:username', async (req, res) => {
         res.json({ message: 'Cart saved successfully' });
     } catch (error) {
         console.error(error);
+        res.status(500).json({ error: 'Internal server error' });
+    }
+});
+
+// Create a new order (Checkout)
+app.post('/api/orders', async (req, res) => {
+    let connection;
+    try {
+        connection = await pool.getConnection();
+        await connection.beginTransaction();
+
+        const { username, totalPrice, fullName, address, city, zipCode, paymentMethod, items } = req.body;
+        if (!username || !totalPrice || !fullName || !address || !city || !zipCode || !paymentMethod || !items || items.length === 0) {
+            await connection.rollback();
+            return res.status(400).json({ error: 'Missing required fields' });
+        }
+
+        // Insert into orders table
+        const [orderResult] = await connection.query(
+            'INSERT INTO orders (username, total_price, full_name, address, city, zip_code, payment_method) VALUES (?, ?, ?, ?, ?, ?, ?)',
+            [username, totalPrice, fullName, address, city, zipCode, paymentMethod]
+        );
+        const orderId = orderResult.insertId;
+
+        // Insert into order_items table
+        const orderItemsValues = items.map(item => [
+            orderId,
+            item.productId,
+            item.quantity || 1,
+            item.price
+        ]);
+        
+        await connection.query(
+            'INSERT INTO order_items (order_id, product_id, quantity, price) VALUES ?',
+            [orderItemsValues]
+        );
+
+        // Clear user's cart
+        await connection.query('DELETE FROM cart_items WHERE username = ?', [username]);
+
+        await connection.commit();
+        res.json({ message: 'Order placed successfully', orderId });
+    } catch (error) {
+        if (connection) await connection.rollback();
+        console.error('Error placing order:', error);
+        res.status(500).json({ error: 'Internal server error' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
+// Get user orders history
+app.get('/api/orders/:username', async (req, res) => {
+    try {
+        const { username } = req.params;
+        
+        // Fetch all orders for this user sorted by created_at DESC
+        const [orders] = await pool.query(
+            'SELECT * FROM orders WHERE username = ? ORDER BY created_at DESC',
+            [username]
+        );
+
+        if (orders.length === 0) {
+            return res.json([]);
+        }
+
+        // Fetch all order items for these orders
+        const orderIds = orders.map(o => o.id);
+        const [items] = await pool.query(
+            'SELECT * FROM order_items WHERE order_id IN (?)',
+            [orderIds]
+        );
+
+        // Group items by order_id
+        const itemsByOrderId = {};
+        items.forEach(item => {
+            if (!itemsByOrderId[item.order_id]) {
+                itemsByOrderId[item.order_id] = [];
+            }
+            itemsByOrderId[item.order_id].push({
+                productId: item.product_id,
+                quantity: item.quantity,
+                price: item.price
+            });
+        });
+
+        // Attach items to each order
+        const ordersWithItems = orders.map(order => ({
+            id: order.id,
+            totalPrice: order.total_price,
+            fullName: order.full_name,
+            address: order.address,
+            city: order.city,
+            zipCode: order.zip_code,
+            paymentMethod: order.payment_method,
+            status: order.status,
+            createdAt: order.created_at,
+            items: itemsByOrderId[order.id] || []
+        }));
+
+        res.json(ordersWithItems);
+    } catch (error) {
+        console.error('Error fetching orders:', error);
         res.status(500).json({ error: 'Internal server error' });
     }
 });
