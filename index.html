@@ -17,6 +17,7 @@
             <a href="index.html">Home</a>
             <a href="shop.html">Shop</a>
             <a href="index.html#about">About</a>
+            <a href="orders.html" id="orders-nav-link" style="display: none;">Orders</a>
         </div>
         <div class="nav-actions" style="display: flex; gap: 1.5rem; align-items: center;">
             <div id="auth-section" style="cursor: pointer; font-weight: 600;">
@@ -44,7 +45,7 @@
         </div>
         <div class="cart-footer">
             <div class="total">Total: <span id="cart-total">$0.00</span></div>
-            <button class="checkout-btn">Checkout</button>
+            <button class="checkout-btn" onclick="handleCheckout()">Checkout</button>
         </div>
     </div>
     <div class="cart-overlay" id="cart-overlay"></div>
@@ -69,6 +70,67 @@
             </div>
         </div>
     </div>
+
+    <!-- Checkout Modal -->
+    <div class="modal-overlay" id="checkout-modal">
+        <div class="modal-content" style="max-width: 550px;">
+            <div class="modal-header">
+                <h2>Checkout</h2>
+                <button class="close-btn" onclick="toggleCheckoutModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="order-summary-container" style="background: rgba(255,255,255,0.03); border: 1px solid var(--glass-border); padding: 1.2rem; border-radius: 12px; margin-bottom: 1.5rem;">
+                    <h3 style="font-size: 1rem; margin-bottom: 0.75rem; color: var(--accent-primary); letter-spacing: 1px;">ORDER SUMMARY</h3>
+                    <div id="checkout-summary-items" style="max-height: 150px; overflow-y: auto; margin-bottom: 0.5rem; padding-right: 0.5rem;">
+                        <!-- Items will be injected here -->
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-weight: 600; border-top: 1px solid var(--glass-border); padding-top: 0.75rem; margin-top: 0.5rem; font-size: 1.1rem;">
+                        <span>Total:</span>
+                        <span id="checkout-total-price" style="color: var(--accent-primary); font-weight: 800;">$0.00</span>
+                    </div>
+                </div>
+                
+                <h3 style="font-size: 1rem; margin-bottom: 0.75rem; color: var(--text-primary); letter-spacing: 1px;">DELIVERY DETAILS</h3>
+                <form id="checkout-form" onsubmit="event.preventDefault(); submitOrder();">
+                    <input type="text" id="checkout-fullname" placeholder="Full Name" class="auth-input" required>
+                    <input type="text" id="checkout-address" placeholder="Address" class="auth-input" required>
+                    <div style="display: flex; gap: 1rem;">
+                        <input type="text" id="checkout-zip" placeholder="Zip Code" class="auth-input" style="flex: 1;" required>
+                        <input type="text" id="checkout-city" placeholder="City" class="auth-input" style="flex: 2;" required>
+                    </div>
+                    
+                    <h3 style="font-size: 1rem; margin-top: 0.5rem; margin-bottom: 0.75rem; color: var(--text-primary); letter-spacing: 1px;">PAYMENT METHOD</h3>
+                    <div style="display: flex; flex-direction: column; gap: 0.5rem; margin-bottom: 1.5rem;">
+                        <label class="payment-label" style="display: flex; align-items: center; gap: 0.75rem; background: rgba(255,255,255,0.03); padding: 0.75rem; border-radius: 8px; border: 1px solid var(--glass-border); cursor: pointer; transition: 0.3s;">
+                            <input type="radio" name="payment-method" value="BLIK" checked style="accent-color: var(--accent-primary);">
+                            <span>BLIK</span>
+                        </label>
+                        <label class="payment-label" style="display: flex; align-items: center; gap: 0.75rem; background: rgba(255,255,255,0.03); padding: 0.75rem; border-radius: 8px; border: 1px solid var(--glass-border); cursor: pointer; transition: 0.3s;">
+                            <input type="radio" name="payment-method" value="Card" style="accent-color: var(--accent-primary);">
+                            <span>Payment Card</span>
+                        </label>
+                        <label class="payment-label" style="display: flex; align-items: center; gap: 0.75rem; background: rgba(255,255,255,0.03); padding: 0.75rem; border-radius: 8px; border: 1px solid var(--glass-border); cursor: pointer; transition: 0.3s;">
+                            <input type="radio" name="payment-method" value="Cash on Delivery" style="accent-color: var(--accent-primary);">
+                            <span>Cash on Delivery</span>
+                        </label>
+                    </div>
+                    
+                    <button type="submit" class="auth-btn">Place Order</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Order Success Modal -->
+    <div class="modal-overlay" id="success-modal">
+        <div class="modal-content" style="text-align: center; max-width: 400px; padding: 3rem 2rem;">
+            <div style="font-size: 4rem; margin-bottom: 1rem;">🎉</div>
+            <h2 style="color: var(--accent-primary); margin-bottom: 1rem; font-weight: 800; letter-spacing: 1px;">ORDER PLACED!</h2>
+            <p style="color: var(--text-secondary); margin-bottom: 2rem; line-height: 1.6;">Thank you for shopping with Fuel Labs. Your order is now being processed.</p>
+            <button class="auth-btn" onclick="goToOrders()">View Orders</button>
+        </div>
+    </div>
+
     <!-- Hero Section -->
     <section id="home" class="hero">
         <div class="hero-content">
