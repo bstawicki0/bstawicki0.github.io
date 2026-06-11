@@ -179,9 +179,20 @@ function updateUserDisplay() {
 }
 
 // Render Products
-function renderProducts() {
+function renderProducts(productsToRender = products) {
     if (!productGrid) return;
-    productGrid.innerHTML = products.map(product => `
+    if (productsToRender.length === 0) {
+        productGrid.innerHTML = `
+            <div class="no-results">
+                <div style="font-size: 3.5rem; margin-bottom: 1rem; color: var(--accent-primary);">🔍</div>
+                <h3 style="margin-bottom: 1rem; font-size: 1.6rem; color: var(--text-primary); font-weight: 800; letter-spacing: 1px;">NO PRODUCTS FOUND</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 2rem; line-height: 1.6; max-width: 450px; margin-left: auto; margin-right: auto;">We couldn't find any products matching your search query. Try typing another keyword or clear the search.</p>
+                <button class="auth-btn" style="max-width: 200px; margin: 0 auto; padding: 0.8rem 2rem;" onclick="clearSearch()">Clear Search</button>
+            </div>
+        `;
+        return;
+    }
+    productGrid.innerHTML = productsToRender.map(product => `
         <div class="product-card" onclick="window.location.href='product.html?id=${product.id}'" style="cursor: pointer;">
             <img src="img/${product.image}" alt="${product.name}" class="product-img">
             <h3 class="product-title">${product.name}</h3>
@@ -522,3 +533,159 @@ updateUserDisplay();
 renderProducts();
 renderProductDetails();
 updateCart();
+
+// ======================
+// SEARCH FEATURE LOGIC
+// ======================
+let originalSectionTitle = '';
+const titleEl = document.querySelector('.section-title');
+if (titleEl) {
+    originalSectionTitle = titleEl.innerHTML;
+}
+
+const navSearchInput = document.getElementById('nav-search-input');
+const searchSuggestions = document.getElementById('search-suggestions');
+const searchIconBtn = document.getElementById('search-icon-btn');
+
+function updateSearchTitle(query, resultsCount) {
+    const titleEl = document.querySelector('.section-title');
+    const subtitleEl = document.querySelector('.shop-header p');
+    
+    if (!titleEl) return;
+    
+    if (query.trim() === '') {
+        titleEl.innerHTML = originalSectionTitle;
+        if (subtitleEl) {
+            subtitleEl.innerText = 'Browse our full collection of premium supplements designed to fuel your ambition.';
+        }
+    } else {
+        titleEl.innerHTML = `SEARCH <span class="highlight">RESULTS</span>`;
+        if (subtitleEl) {
+            subtitleEl.innerHTML = `Found <span style="color: var(--accent-primary); font-weight: 600;">${resultsCount}</span> product${resultsCount !== 1 ? 's' : ''} matching "${query}"`;
+        } else {
+            titleEl.innerHTML = `RESULTS FOR <span class="highlight">"${query.toUpperCase()}"</span>`;
+        }
+    }
+}
+
+function showSuggestions(query) {
+    if (!searchSuggestions) return;
+    
+    if (query.trim() === '') {
+        searchSuggestions.classList.remove('active');
+        searchSuggestions.innerHTML = '';
+        return;
+    }
+    
+    const matched = products.filter(p => p.name.toLowerCase().includes(query.toLowerCase()));
+    
+    if (matched.length === 0) {
+        searchSuggestions.innerHTML = `
+            <div style="padding: 1rem; text-align: center; color: var(--text-secondary); font-size: 0.9rem;">
+                No matches found
+            </div>
+        `;
+    } else {
+        const topMatches = matched.slice(0, 5);
+        searchSuggestions.innerHTML = topMatches.map(product => `
+            <div class="suggestion-item" onclick="navigateProduct(${product.id})">
+                <img src="img/${product.image}" alt="${product.name}">
+                <div class="suggestion-info">
+                    <span class="suggestion-name">${product.name}</span>
+                    <span class="suggestion-price">$${product.price.toFixed(2)}</span>
+                </div>
+            </div>
+        `).join('');
+    }
+    searchSuggestions.classList.add('active');
+}
+
+function performSearch(query) {
+    const cleanedQuery = query.trim().toLowerCase();
+    
+    if (productGrid) {
+        const filtered = products.filter(p => p.name.toLowerCase().includes(cleanedQuery));
+        renderProducts(filtered);
+        updateSearchTitle(query, filtered.length);
+    }
+}
+
+function submitSearch() {
+    if (!navSearchInput) return;
+    const query = navSearchInput.value.trim();
+    if (query === '') return;
+    
+    const currentPath = window.location.pathname;
+    const isOnShopOrHome = currentPath.endsWith('index.html') || currentPath.endsWith('shop.html') || currentPath === '/' || currentPath.endsWith('/') || currentPath === '';
+    
+    if (isOnShopOrHome && productGrid) {
+        performSearch(query);
+        if (searchSuggestions) searchSuggestions.classList.remove('active');
+    } else {
+        window.location.href = `shop.html?search=${encodeURIComponent(query)}`;
+    }
+}
+
+// Global Expose
+window.navigateProduct = function(id) {
+    window.location.href = `product.html?id=${id}`;
+};
+
+window.clearSearch = function() {
+    if (navSearchInput) {
+        navSearchInput.value = '';
+    }
+    if (searchSuggestions) {
+        searchSuggestions.innerHTML = '';
+        searchSuggestions.classList.remove('active');
+    }
+    performSearch('');
+};
+
+// Event Listeners
+if (navSearchInput) {
+    navSearchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            submitSearch();
+        }
+    });
+    
+    navSearchInput.addEventListener('input', (e) => {
+        const query = e.target.value;
+        showSuggestions(query);
+        
+        const currentPath = window.location.pathname;
+        const isOnShopOrHome = currentPath.endsWith('index.html') || currentPath.endsWith('shop.html') || currentPath === '/' || currentPath.endsWith('/') || currentPath === '';
+        if (isOnShopOrHome && productGrid) {
+            performSearch(query);
+        }
+    });
+    
+    navSearchInput.addEventListener('blur', () => {
+        setTimeout(() => {
+            if (searchSuggestions) searchSuggestions.classList.remove('active');
+        }, 200);
+    });
+    
+    navSearchInput.addEventListener('focus', () => {
+        if (navSearchInput.value.trim() !== '') {
+            showSuggestions(navSearchInput.value);
+        }
+    });
+}
+
+if (searchIconBtn) {
+    searchIconBtn.addEventListener('click', () => {
+        submitSearch();
+    });
+}
+
+// Handle initialization search from query parameter
+if (navSearchInput) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const searchQuery = urlParams.get('search');
+    if (searchQuery) {
+        navSearchInput.value = searchQuery;
+        performSearch(searchQuery);
+    }
+}
