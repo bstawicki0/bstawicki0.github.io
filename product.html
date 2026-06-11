@@ -20,6 +20,11 @@
             <a href="orders.html" id="orders-nav-link" style="display: none;">Orders</a>
         </div>
         <div class="nav-actions" style="display: flex; gap: 1.5rem; align-items: center;">
+            <div class="search-container" id="search-container">
+                <input type="text" id="nav-search-input" placeholder="Search products..." autocomplete="off">
+                <span class="search-icon" id="search-icon-btn">🔍</span>
+                <div id="search-suggestions" class="search-suggestions"></div>
+            </div>
             <div id="auth-section" style="cursor: pointer; font-weight: 600;">
                 <span id="login-btn" style="color: var(--text-secondary); transition: color 0.3s; display: block;"
                     onmouseover="this.style.color='var(--accent-primary)'"
